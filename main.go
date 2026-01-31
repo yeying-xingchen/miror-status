@@ -1,9 +1,12 @@
 package main
 
 import (
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/host"
@@ -11,6 +14,15 @@ import (
 )
 
 // 数据结构
+type Config struct {
+	Port   int  `toml:"port"`
+	CPU    bool `toml:"cpu"`
+	Memory bool `toml:"memory"`
+	Disk   bool `toml:"disk"`
+	Host   bool `toml:"host"`
+}
+
+// 系统信息结构
 type SystemInfo struct {
 	CPU    []CPUInfo  `json:"cpu"`
 	Memory MemoryInfo `json:"memory"`
@@ -48,50 +60,100 @@ type HostInfo struct {
 	CreateTime time.Time `json:"create_time"`
 }
 
+var config Config
+
 func main() {
+	// 尝试从 config.toml 文件读取配置
+	data, err := os.ReadFile("config.toml")
+	if err != nil {
+		// 如果 config.toml 不存在，则尝试读取 mirror.toml
+		data, err = os.ReadFile("mirror.toml")
+		if err != nil {
+			// 如果都不存在，使用默认配置
+			config = Config{
+				Port:   8080,
+				CPU:    true,
+				Memory: true,
+				Disk:   true,
+				Host:   true,
+			}
+		} else {
+			err = toml.Unmarshal(data, &config)
+			if err != nil {
+				panic(err)
+			}
+		}
+	} else {
+		err = toml.Unmarshal(data, &config)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	router := gin.Default()
 
 	// 获取总信息
-	router.GET("/", func(c *gin.Context) {
-		info := GetSystemInfo()
-		c.JSON(200, info)
-	})
+	if config.CPU && config.Memory && config.Disk && config.Host {
+		router.GET("/", func(c *gin.Context) {
+			info := GetSystemInfo()
+			c.JSON(200, info)
+		})
+	}
 
-	// 获取CPU信息
-	router.GET("/cpu", func(c *gin.Context) {
-		cpuInfo := GetCPUInfo()
-		c.JSON(200, cpuInfo)
-	})
+	// 根据配置注册各个路由
+	if config.CPU {
+		router.GET("/cpu", func(c *gin.Context) {
+			cpuInfo := GetCPUInfo()
+			c.JSON(200, cpuInfo)
+		})
+	}
 
-	// 获取内存信息
-	router.GET("/memory", func(c *gin.Context) {
-		memInfo := GetMemoryInfo()
-		c.JSON(200, memInfo)
-	})
+	if config.Memory {
+		router.GET("/memory", func(c *gin.Context) {
+			memInfo := GetMemoryInfo()
+			c.JSON(200, memInfo)
+		})
+	}
 
-	// 获取磁盘信息
-	router.GET("/disk", func(c *gin.Context) {
-		diskInfo := GetDiskInfo()
-		c.JSON(200, diskInfo)
-	})
+	if config.Disk {
+		router.GET("/disk", func(c *gin.Context) {
+			diskInfo := GetDiskInfo()
+			c.JSON(200, diskInfo)
+		})
+	}
 
-	// 获取主机信息
-	router.GET("/host", func(c *gin.Context) {
-		hostInfo := GetHostInfo()
-		c.JSON(200, hostInfo)
-	})
+	if config.Host {
+		router.GET("/host", func(c *gin.Context) {
+			hostInfo := GetHostInfo()
+			c.JSON(200, hostInfo)
+		})
+	}
 
-	router.Run(":8080")
+	// 启动服务器
+	if err := router.Run(":" + strconv.Itoa(config.Port)); err != nil {
+		println("服务启动失败: ", err.Error())
+	}
 }
 
 // 完整的系统信息
 func GetSystemInfo() SystemInfo {
-	return SystemInfo{
-		CPU:    GetCPUInfo(),
-		Memory: GetMemoryInfo(),
-		Disk:   GetDiskInfo(),
-		Host:   GetHostInfo(),
+	info := SystemInfo{}
+
+	// 只有当对应模块启用时才获取信息
+	if config.CPU {
+		info.CPU = GetCPUInfo()
 	}
+	if config.Memory {
+		info.Memory = GetMemoryInfo()
+	}
+	if config.Disk {
+		info.Disk = GetDiskInfo()
+	}
+	if config.Host {
+		info.Host = GetHostInfo()
+	}
+
+	return info
 }
 
 // CPU信息
