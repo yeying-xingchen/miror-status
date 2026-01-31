@@ -1,4 +1,5 @@
 port = 8080
+all = true
 cpu = true
 memory = true
 disk = true

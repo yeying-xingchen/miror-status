@@ -16,6 +16,7 @@ import (
 // 数据结构
 type Config struct {
 	Port   int  `toml:"port"`
+	All    bool `toml:"all"`
 	CPU    bool `toml:"cpu"`
 	Memory bool `toml:"memory"`
 	Disk   bool `toml:"disk"`
@@ -72,6 +73,7 @@ func main() {
 			// 如果都不存在，使用默认配置
 			config = Config{
 				Port:   8080,
+				All:    true,
 				CPU:    true,
 				Memory: true,
 				Disk:   true,
@@ -93,7 +95,7 @@ func main() {
 	router := gin.Default()
 
 	// 获取总信息
-	if config.CPU && config.Memory && config.Disk && config.Host {
+	if config.All {
 		router.GET("/", func(c *gin.Context) {
 			info := GetSystemInfo()
 			c.JSON(200, info)
