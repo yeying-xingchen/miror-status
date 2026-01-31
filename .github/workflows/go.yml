@@ -1,0 +1,47 @@
+name: Go build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 定义要构建的操作系统和架构组合
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+        
+    - name: Get dependencies
+      run: |
+        go mod download
+        
+    - name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          export BINARY_NAME=mirror-status-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+          CGO_ENABLED=0 go build -o ${BINARY_NAME} -ldflags="-s -w" .
+        else
+          export BINARY_NAME=mirror-status-${{ matrix.goos }}-${{ matrix.goarch }}
+          CGO_ENABLED=0 go build -o ${BINARY_NAME} -ldflags="-s -w" .
+        fi
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: |
+          mirror-status-*.*
